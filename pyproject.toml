@@ -1,0 +1,41 @@
+[project]
+name = "ecosystemsim"
+version = "0.1.0"
+description = "Boreal chickadee / ermine micro-forest simulator"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "msgspec>=0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "hypothesis>=6.100",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ecosystemsim"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+exclude = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
