@@ -62,6 +62,9 @@ class WorldGrid:
         # Scent fields per layer (0–1 intensity).
         self.scent: NDArray[np.float32] = np.zeros(shape3, dtype=np.float32)
 
+        # Tree id per tile, -1 = no tree at this anchor.
+        self.tree_id: NDArray[np.int32] = np.full(shape2, -1, dtype=np.int32)
+
     # ------------------------------------------------------------------
     # Convenience accessors
     # ------------------------------------------------------------------

@@ -45,10 +45,32 @@ class ClockConfig(msgspec.Struct, frozen=True):
             raise ValueError(f"max_ticks must be positive, got {self.max_ticks}")
 
 
+class FloraConfig(msgspec.Struct, frozen=True):
+    black_spruce_density: float = 0.14
+    snag_fraction: float = 0.12
+    moss_patch_density: float = 0.10
+    fungi_patch_density: float = 0.06
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("black_spruce_density", self.black_spruce_density),
+            ("snag_fraction", self.snag_fraction),
+            ("moss_patch_density", self.moss_patch_density),
+            ("fungi_patch_density", self.fungi_patch_density),
+        ):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be in [0.0, 1.0], got {value}")
+
+
+def default_flora_config() -> FloraConfig:
+    return FloraConfig()
+
+
 class RunConfig(msgspec.Struct, frozen=True):
     seed: int
     map: MapConfig
     clock: ClockConfig
+    flora: FloraConfig = msgspec.field(default_factory=FloraConfig)
 
     @staticmethod
     def from_file(path: Path | str) -> RunConfig:
@@ -74,6 +96,7 @@ def default_run_config() -> RunConfig:
         seed=40217,
         map=default_map_config(),
         clock=default_clock_config(),
+        flora=default_flora_config(),
     )
 
 
