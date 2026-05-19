@@ -1,0 +1,1 @@
+{"seed":40217,"map":{"width":50,"height":50,"layers":["ground","understory","trunk","canopy","cavity"],"tile_scale_m":2.0},"clock":{"tick_seconds":10.0,"max_ticks":8640},"flora":{"black_spruce_density":0.25,"snag_fraction":0.12,"moss_patch_density":0.10,"fungi_patch_density":0.06},"fauna":{"chickadees":{"count":2,"start_energy_kj":38.0}}}
