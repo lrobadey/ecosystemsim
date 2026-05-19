@@ -166,15 +166,20 @@ def load_config_from_json(data: bytes | str) -> RunConfig:
     return msgspec.json.decode(data, type=RunConfig)
 
 
+def _walk_struct(obj: object) -> None:
+    if not isinstance(obj, msgspec.Struct):
+        return
+    if hasattr(obj, "__post_init__"):
+        obj.__post_init__()
+    for f in msgspec.structs.fields(obj):
+        _walk_struct(getattr(obj, f.name))
+
+
 def validate_config(cfg: RunConfig) -> None:
     """Re-validate a config by round-tripping through encode/decode."""
     raw = msgspec.json.encode(cfg)
     decoded = msgspec.json.decode(raw, type=RunConfig)
-    # Re-trigger post_init validators
-    decoded.map.__post_init__()
-    decoded.clock.__post_init__()
-    decoded.flora.__post_init__()
-    decoded.fauna.chickadees.__post_init__()
+    _walk_struct(decoded)
 
 
 def make_scenario_json(path: Path | str) -> None:

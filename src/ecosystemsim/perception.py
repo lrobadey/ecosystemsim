@@ -57,20 +57,9 @@ class ChickadeePercept:
     food_beacon: tuple[int, int, Layer] | None
 
 
-def _tile_leads_to_black_spruce(world: WorldGrid, store: StaticEntityStore, x: int, y: int) -> bool:
+def _tile_leads_to_black_spruce(store: StaticEntityStore, x: int, y: int) -> bool:
     """True when the tile sits on a live black-spruce trunk or crown."""
-    tid = int(world.tree_id[y, x])
-    if tid >= 0:
-        tree = store.get_tree(tid)
-        if tree is not None and tree.species == "black_spruce" and tree.state == "live":
-            return True
-    # Crown tiles aren't anchors; check if any nearby live tree owns this tile.
-    for tree in store.trees:
-        if tree.state != "live" or tree.species != "black_spruce":
-            continue
-        if (x, y) in tree.crown_tiles:
-            return True
-    return False
+    return (x, y) in store.black_spruce_tiles
 
 
 def _here_candidate(
@@ -85,7 +74,7 @@ def _here_candidate(
         layer=agent.layer,
         expected_biomass=biomass,
         travel_cost=0.0,
-        leads_to_black_spruce=_tile_leads_to_black_spruce(world, store, agent.x, agent.y),
+        leads_to_black_spruce=_tile_leads_to_black_spruce(store, agent.x, agent.y),
     )
 
 
@@ -125,7 +114,7 @@ def build_chickadee_percept(
                         layer=layer,
                         expected_biomass=biomass,
                         travel_cost=travel,
-                        leads_to_black_spruce=_tile_leads_to_black_spruce(world, store, x, y),
+                        leads_to_black_spruce=_tile_leads_to_black_spruce(store, x, y),
                     )
                 )
 
@@ -241,7 +230,7 @@ def _best_crown_roost(
         for x in range(x0, x1):
             if not world.layer_present[Layer.CANOPY, y, x]:
                 continue
-            if not _tile_leads_to_black_spruce(world, store, x, y):
+            if not _tile_leads_to_black_spruce(store, x, y):
                 continue
             if int(world.occupants[Layer.CANOPY, y, x]) not in (NO_OCCUPANT, agent.agent_id):
                 continue

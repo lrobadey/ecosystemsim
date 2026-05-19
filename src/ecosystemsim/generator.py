@@ -291,4 +291,5 @@ def generate_forest(
                 if 0 <= tx < width and 0 <= ty < height:
                     world.resource_biomass[Layer.GROUND, ty, tx] += np.float32(mod.insect_bonus)
 
+    store.build_indices()
     return store

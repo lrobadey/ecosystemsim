@@ -166,13 +166,13 @@ def decide_chickadee(
                 and cav.cavity_id is not None
             ):
                 return RoostIntent(cavity_id=cav.cavity_id)
-            return _step_toward(agent, cav.x, cav.y, Layer.TRUNK, percept)
+            return _pick_closest(percept.neighbors, cav.x, cav.y, Layer.TRUNK, agent)
         if percept.crown_roost is not None:
             crown = percept.crown_roost
             # Already at the crown roost → stay put for the night.
             if agent.layer == Layer.CANOPY and agent.x == crown.x and agent.y == crown.y:
                 return StayIntent()
-            return _step_toward(agent, crown.x, crown.y, Layer.CANOPY, percept)
+            return _pick_closest(percept.neighbors, crown.x, crown.y, Layer.CANOPY, agent)
         # No reachable roost — settle on a stable canopy tile.
         if agent.layer == Layer.CANOPY:
             return StayIntent()
@@ -207,16 +207,16 @@ def decide_chickadee(
         (c.x, c.y, int(c.layer)): c.expected_biomass for c in percept.forage
     }
     best_action: ChickadeeIntent = StayIntent()
-    best_score = float("-inf")
+    best_key: tuple[float, int, int, int] | None = None
     for nx, ny, nl in percept.neighbors:
         if forage_biomass.get((nx, ny, int(nl)), 0.0) <= 0.0:
             continue
         score = _neighbor_score(agent, nx, ny, nl, percept, cfg)
         key = (score, -int(nl), -ny, -nx)
-        if key > (best_score, 0, 0, 0):
-            best_score = score
+        if best_key is None or key > best_key:
+            best_key = key
             best_action = MoveIntent(to_x=nx, to_y=ny, to_layer=nl)
-    if best_score > float("-inf"):
+    if best_key is not None:
         return best_action
 
     # 7. Stranded — no immediate food. Step toward the most attractive distant
@@ -302,38 +302,6 @@ def _pick_closest(
     best: tuple[int, int, Layer] | None = None
     best_key: tuple[int, int, int, int] | None = None
     for nx, ny, nl in candidates:
-        layer_match = 0 if nl == target_layer else 1
-        dist = max(abs(nx - tx), abs(ny - ty))
-        key = (dist, layer_match, int(nl), ny * 10_000 + nx)
-        if best_key is None or key < best_key:
-            best_key = key
-            best = (nx, ny, nl)
-    if best is None:
-        return StayIntent()
-    nx, ny, nl = best
-    if nx == agent.x and ny == agent.y and nl == agent.layer:
-        return StayIntent()
-    return MoveIntent(to_x=nx, to_y=ny, to_layer=nl)
-
-
-def _step_toward(
-    agent: ChickadeeAgent,
-    tx: int,
-    ty: int,
-    target_layer: Layer,
-    percept: ChickadeePercept,
-) -> ChickadeeIntent:
-    """Choose a legal one-tile step from ``agent`` toward ``(tx, ty, target_layer)``.
-
-    Picks the legal neighbor minimizing Chebyshev distance to the target tile;
-    ties broken to prefer the target layer, then by ``(layer, y, x)`` for
-    determinism.
-    """
-    if not percept.neighbors:
-        return StayIntent()
-    best: tuple[int, int, Layer] | None = None
-    best_key: tuple[int, int, int, int] | None = None
-    for nx, ny, nl in percept.neighbors:
         layer_match = 0 if nl == target_layer else 1
         dist = max(abs(nx - tx), abs(ny - ty))
         key = (dist, layer_match, int(nl), ny * 10_000 + nx)
