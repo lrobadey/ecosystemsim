@@ -66,11 +66,63 @@ def default_flora_config() -> FloraConfig:
     return FloraConfig()
 
 
+class ChickadeeParamsConfig(msgspec.Struct, frozen=True):
+    count: int = 2
+    start_energy_kj: float = 38.0
+    target_energy_kj: float = 55.0
+    max_energy_kj: float = 70.0
+    starvation_threshold_kj: float = 0.0
+    daytime_metabolism_kj_per_tick: float = 0.0058
+    cavity_metabolism_multiplier: float = 0.70
+    crown_metabolism_multiplier: float = 0.85
+    forage_yield_kj_per_biomass: float = 1.8
+    forage_bite_max_biomass: float = 0.4
+    move_cost_kj: float = 0.05
+    perception_radius: int = 6
+    memory_capacity: int = 8
+
+    def __post_init__(self) -> None:
+        non_negative = (
+            ("start_energy_kj", self.start_energy_kj),
+            ("target_energy_kj", self.target_energy_kj),
+            ("max_energy_kj", self.max_energy_kj),
+            ("starvation_threshold_kj", self.starvation_threshold_kj),
+            ("daytime_metabolism_kj_per_tick", self.daytime_metabolism_kj_per_tick),
+            ("forage_yield_kj_per_biomass", self.forage_yield_kj_per_biomass),
+            ("forage_bite_max_biomass", self.forage_bite_max_biomass),
+            ("move_cost_kj", self.move_cost_kj),
+        )
+        for name, value in non_negative:
+            if value < 0:
+                raise ValueError(f"{name} must be >= 0, got {value}")
+        for name, value in (
+            ("cavity_metabolism_multiplier", self.cavity_metabolism_multiplier),
+            ("crown_metabolism_multiplier", self.crown_metabolism_multiplier),
+        ):
+            if not 0.0 < value <= 1.0:
+                raise ValueError(f"{name} must be in (0, 1], got {value}")
+        if self.count < 0:
+            raise ValueError(f"count must be >= 0, got {self.count}")
+        if self.perception_radius < 0:
+            raise ValueError(f"perception_radius must be >= 0, got {self.perception_radius}")
+        if self.memory_capacity < 1:
+            raise ValueError(f"memory_capacity must be >= 1, got {self.memory_capacity}")
+
+
+class FaunaConfig(msgspec.Struct, frozen=True):
+    chickadees: ChickadeeParamsConfig = msgspec.field(default_factory=ChickadeeParamsConfig)
+
+
+def default_fauna_config() -> FaunaConfig:
+    return FaunaConfig()
+
+
 class RunConfig(msgspec.Struct, frozen=True):
     seed: int
     map: MapConfig
     clock: ClockConfig
     flora: FloraConfig = msgspec.field(default_factory=FloraConfig)
+    fauna: FaunaConfig = msgspec.field(default_factory=FaunaConfig)
 
     @staticmethod
     def from_file(path: Path | str) -> RunConfig:
@@ -97,6 +149,7 @@ def default_run_config() -> RunConfig:
         map=default_map_config(),
         clock=default_clock_config(),
         flora=default_flora_config(),
+        fauna=default_fauna_config(),
     )
 
 
@@ -117,6 +170,8 @@ def validate_config(cfg: RunConfig) -> None:
     # Re-trigger post_init validators
     decoded.map.__post_init__()
     decoded.clock.__post_init__()
+    decoded.flora.__post_init__()
+    decoded.fauna.chickadees.__post_init__()
 
 
 def make_scenario_json(path: Path | str) -> None:

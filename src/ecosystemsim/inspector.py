@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ecosystemsim.agents.chickadee import AgentStore
 from ecosystemsim.entities import StaticEntityStore
-from ecosystemsim.world import Layer, WorldGrid
+from ecosystemsim.world import LAYER_NAMES, Layer, WorldGrid
 
 
 def _tree_dict(store: StaticEntityStore, tree_id: int) -> dict[str, Any] | None:
@@ -90,3 +91,37 @@ def inspect_tile(
         "resource_biomass": resource_biomass,
         "occupants": occupants,
     }
+
+
+def inspect_agent(
+    agent_id: int,
+    world: WorldGrid,
+    store: StaticEntityStore,
+    agents: AgentStore,
+) -> dict[str, Any]:
+    """Return a snapshot of the chickadee with ``agent_id``."""
+    del world, store  # accepted for symmetry with inspect_tile / future use
+    for agent in agents.chickadees:
+        if agent.agent_id == agent_id:
+            return {
+                "agent_id": agent.agent_id,
+                "species": "boreal_chickadee",
+                "xy": [agent.x, agent.y],
+                "layer": LAYER_NAMES[agent.layer],
+                "energy_kj": agent.energy_kj,
+                "state": agent.state.value,
+                "cavity_id": agent.cavity_id,
+                "alive": agent.alive,
+                "memory": [
+                    {
+                        "kind": rec.kind,
+                        "x": rec.x,
+                        "y": rec.y,
+                        "layer": LAYER_NAMES[rec.layer],
+                        "value": rec.value,
+                        "age_ticks": rec.age_ticks,
+                    }
+                    for rec in agent.memory
+                ],
+            }
+    raise KeyError(f"no chickadee with agent_id={agent_id}")
