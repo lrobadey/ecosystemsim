@@ -12,7 +12,12 @@ from ecosystemsim.generator import generate_forest
 from ecosystemsim.perception import build_chickadee_percept
 from ecosystemsim.rng import make_rng
 from ecosystemsim.spawn import spawn_chickadees
-from ecosystemsim.systems import apply_chickadee_metabolism, resolve_chickadee_intents
+from ecosystemsim.systems import (
+    age_chickadee_memories,
+    apply_chickadee_metabolism,
+    resolve_chickadee_intents,
+    update_chickadee_behavioral_states,
+)
 from ecosystemsim.world import LAYER_NAMES, WorldGrid, make_world
 
 
@@ -67,6 +72,9 @@ def run_headless(cfg: RunConfig) -> tuple[SimResult, EventLog]:
     time_budget: dict[int, dict[str, int]] = {
         a.agent_id: {name: 0 for name in LAYER_NAMES} for a in agents.chickadees
     }
+    daylight_time_budget: dict[int, dict[str, int]] = {
+        a.agent_id: {name: 0 for name in LAYER_NAMES} for a in agents.chickadees
+    }
 
     for _ in range(cfg.clock.max_ticks):
         clock.advance()
@@ -76,9 +84,13 @@ def run_headless(cfg: RunConfig) -> tuple[SimResult, EventLog]:
             intents.append((agent, decide_chickadee(agent, percept, cfg, rng)))
         resolve_chickadee_intents(intents, world, store, log, clock.current_tick, rng, cfg)
         apply_chickadee_metabolism(agents.chickadees, world, store, clock, cfg, log)
+        update_chickadee_behavioral_states(agents.chickadees, clock)
+        age_chickadee_memories(agents.chickadees, cfg)
 
         for agent in agents.alive_chickadees():
             time_budget[agent.agent_id][LAYER_NAMES[agent.layer]] += 1
+            if clock.is_daytime:
+                daylight_time_budget[agent.agent_id][LAYER_NAMES[agent.layer]] += 1
 
         if clock.current_tick % ticks_per_day == 0:
             log.emit(
@@ -91,13 +103,17 @@ def run_headless(cfg: RunConfig) -> tuple[SimResult, EventLog]:
                             "alive": a.alive,
                             "energy_kj": a.energy_kj,
                             "state": a.state.value,
-                            "time_budget": dict(time_budget[a.agent_id]),
+                            "total_time_budget": dict(time_budget[a.agent_id]),
+                            "daylight_time_budget": dict(daylight_time_budget[a.agent_id]),
                         }
                         for a in agents.chickadees
                     ]
                 },
             )
             for budget in time_budget.values():
+                for key in budget:
+                    budget[key] = 0
+            for budget in daylight_time_budget.values():
                 for key in budget:
                     budget[key] = 0
 

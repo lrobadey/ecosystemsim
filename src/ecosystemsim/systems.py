@@ -11,12 +11,13 @@ from ecosystemsim.agents.chickadee import (
     ChickadeeIntent,
     ChickadeeState,
     ForageIntent,
+    MemoryRecord,
     MoveIntent,
     RoostIntent,
     StayIntent,
 )
 from ecosystemsim.clock import SimClock
-from ecosystemsim.entities import StaticEntityStore
+from ecosystemsim.entities import CavityEntity, StaticEntityStore
 from ecosystemsim.events import EventLog
 from ecosystemsim.world import LAYER_NAMES, NO_OCCUPANT, Layer, WorldGrid
 
@@ -228,6 +229,7 @@ def _resolve_forage(
     world.resource_biomass[agent.layer, agent.y, agent.x] = new_biomass
     if agent.state not in (ChickadeeState.ROOSTING, ChickadeeState.PRE_ROOST, ChickadeeState.DEAD):
         agent.state = ChickadeeState.FORAGE
+    _update_forage_memory(agent, actual_gain, cfg)
     log.emit(
         tick,
         "chickadee_foraged",
@@ -251,6 +253,7 @@ def _resolve_roost(
     store: StaticEntityStore,
     log: EventLog,
     tick: int,
+    cfg: RunConfig,
 ) -> None:
     cav = None
     for c in store.cavities:
@@ -277,6 +280,7 @@ def _resolve_roost(
     cav.occupied_by = agent.agent_id
     agent.cavity_id = cav.entity_id
     agent.state = ChickadeeState.ROOSTING
+    _update_roost_memory(agent, cav, cfg)
 
     log.emit(
         tick,
@@ -315,7 +319,7 @@ def resolve_chickadee_intents(
         elif isinstance(intent, ForageIntent):
             _resolve_forage(agent, world, log, tick, cfg)
         elif isinstance(intent, RoostIntent):
-            _resolve_roost(agent, intent, world, store, log, tick)
+            _resolve_roost(agent, intent, world, store, log, tick, cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +350,7 @@ def apply_chickadee_metabolism(
     for agent in agents:
         if not agent.alive:
             continue
-        if agent.state == ChickadeeState.ROOSTING:
+        if agent.layer == Layer.CAVITY:
             drain = base * params.cavity_metabolism_multiplier
         elif agent.layer in (Layer.CANOPY, Layer.UNDERSTORY) and _on_live_tree(
             store, world, agent.x, agent.y
@@ -375,8 +379,106 @@ def apply_chickadee_metabolism(
             )
 
 
+# ---------------------------------------------------------------------------
+# Memory updates (called from resolver helpers above)
+# ---------------------------------------------------------------------------
+
+
+def _update_forage_memory(agent: ChickadeeAgent, actual_gain: float, cfg: RunConfig) -> None:
+    if actual_gain <= 0.0:
+        return
+    capacity = cfg.fauna.chickadees.memory_capacity
+    for rec in agent.memory:
+        if (
+            rec.kind == "profitable"
+            and rec.x == agent.x
+            and rec.y == agent.y
+            and rec.layer == agent.layer
+        ):
+            rec.value = max(rec.value, actual_gain)
+            rec.age_ticks = 0
+            return
+    agent.memory.append(
+        MemoryRecord(
+            kind="profitable",
+            x=agent.x,
+            y=agent.y,
+            layer=agent.layer,
+            value=actual_gain,
+            age_ticks=0,
+        )
+    )
+    if len(agent.memory) > capacity:
+        agent.memory.sort(key=lambda r: r.age_ticks, reverse=True)
+        del agent.memory[capacity:]
+
+
+def _update_roost_memory(agent: ChickadeeAgent, cav: CavityEntity, cfg: RunConfig) -> None:
+    capacity = cfg.fauna.chickadees.memory_capacity
+    for rec in agent.memory:
+        if rec.kind == "roost" and rec.x == cav.entrance_x and rec.y == cav.entrance_y:
+            rec.value = cav.insulation_score
+            rec.age_ticks = 0
+            return
+    agent.memory.append(
+        MemoryRecord(
+            kind="roost",
+            x=cav.entrance_x,
+            y=cav.entrance_y,
+            layer=Layer.CAVITY,
+            value=cav.insulation_score,
+            age_ticks=0,
+        )
+    )
+    if len(agent.memory) > capacity:
+        agent.memory.sort(key=lambda r: r.age_ticks, reverse=True)
+        del agent.memory[capacity:]
+
+
+# ---------------------------------------------------------------------------
+# Post-resolve behavioral state sync
+# ---------------------------------------------------------------------------
+
+
+def update_chickadee_behavioral_states(
+    agents: list[ChickadeeAgent],
+    clock: SimClock,
+) -> None:
+    """Sync agent.state with structural position after each tick's resolution.
+
+    Keeps the decide/resolve boundary clean: decide returns intents only;
+    state transitions are inferred here from position and clock phase.
+    """
+    for agent in agents:
+        if not agent.alive:
+            continue
+        if agent.layer == Layer.CAVITY:
+            agent.state = ChickadeeState.ROOSTING
+        elif clock.dusk_pressure > 0.7:
+            agent.state = ChickadeeState.PRE_ROOST
+        # FORAGE and WARMUP are set by the resolver and remain until next transition.
+
+
+# ---------------------------------------------------------------------------
+# Per-tick memory aging and capacity cap
+# ---------------------------------------------------------------------------
+
+
+def age_chickadee_memories(agents: list[ChickadeeAgent], cfg: RunConfig) -> None:
+    """Increment age_ticks on all memory records and evict oldest above capacity."""
+    capacity = cfg.fauna.chickadees.memory_capacity
+    for agent in agents:
+        for rec in agent.memory:
+            rec.age_ticks += 1
+        if len(agent.memory) > capacity:
+            agent.memory.sort(key=lambda r: r.age_ticks, reverse=True)
+            del agent.memory[capacity:]
+
+
 __all__ = [
+    "age_chickadee_memories",
     "apply_chickadee_metabolism",
     "legal_chickadee_neighbors",
     "resolve_chickadee_intents",
+    "update_chickadee_behavioral_states",
 ]

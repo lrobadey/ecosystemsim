@@ -136,7 +136,12 @@ def build_chickadee_percept(
     cavity_roost: RoostCandidate | None = _best_cavity(agent, store, world, radius * 2)
     crown_roost: RoostCandidate | None = _best_crown_roost(agent, world, store, radius)
     descent_anchor = _descent_anchor_for(agent, store)
-    food_beacon = _global_food_beacon(agent, world) if not top_forage else None
+    has_memory_food = any(r.kind == "profitable" for r in agent.memory)
+    food_beacon = (
+        _global_food_beacon(agent, world, cfg.fauna.chickadees.food_beacon_radius)
+        if not top_forage and not has_memory_food
+        else None
+    )
 
     return ChickadeePercept(
         agent_id=agent.agent_id,
@@ -152,12 +157,14 @@ def build_chickadee_percept(
     )
 
 
-def _global_food_beacon(agent: ChickadeeAgent, world: WorldGrid) -> tuple[int, int, Layer] | None:
-    """Closest tree-layer tile with positive biomass on the entire map.
+def _global_food_beacon(
+    agent: ChickadeeAgent, world: WorldGrid, max_range: int
+) -> tuple[int, int, Layer] | None:
+    """Closest tree-layer tile with positive biomass within ``max_range`` tiles.
 
-    Used as a long-range escape target when the perception radius is empty —
-    chickadees can in reality see canopy across the stand, so this stand-in
-    keeps the bird from starving in a depleted local patch.
+    Scaffold: stand-in for long-range visual canopy perception. Fires only when
+    the local perception radius is empty and the agent has no profitable memory —
+    once memory populates, birds navigate by remembered sites instead.
     """
     best: tuple[int, int, Layer] | None = None
     best_key: tuple[int, int, int, int] | None = None
@@ -169,6 +176,8 @@ def _global_food_beacon(agent: ChickadeeAgent, world: WorldGrid) -> tuple[int, i
         for y, x in zip(ys.tolist(), xs.tolist(), strict=False):
             xi, yi = int(x), int(y)
             dist = max(abs(xi - agent.x), abs(yi - agent.y))
+            if dist > max_range:
+                continue
             key = (dist, int(layer), yi, xi)
             if best_key is None or key < best_key:
                 best_key = key

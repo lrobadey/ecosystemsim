@@ -80,6 +80,7 @@ class ChickadeeParamsConfig(msgspec.Struct, frozen=True):
     move_cost_kj: float = 0.05
     perception_radius: int = 6
     memory_capacity: int = 8
+    food_beacon_radius: int = 40  # tiles; 40 × 2 m = 80 m, plausible stand-scale visibility
 
     def __post_init__(self) -> None:
         non_negative = (
@@ -107,6 +108,8 @@ class ChickadeeParamsConfig(msgspec.Struct, frozen=True):
             raise ValueError(f"perception_radius must be >= 0, got {self.perception_radius}")
         if self.memory_capacity < 1:
             raise ValueError(f"memory_capacity must be >= 1, got {self.memory_capacity}")
+        if self.food_beacon_radius < 0:
+            raise ValueError(f"food_beacon_radius must be >= 0, got {self.food_beacon_radius}")
 
 
 class FaunaConfig(msgspec.Struct, frozen=True):

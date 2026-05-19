@@ -156,11 +156,7 @@ def decide_chickadee(
     # 1. Pre-roost takes priority when dusk is salient and a roost is reachable.
     if dusk_pressure > 0.7:
         if agent.layer == Layer.CAVITY:
-            # Already roosting inside a cavity — keep the ROOSTING state and
-            # its metabolism multiplier intact.
-            agent.state = ChickadeeState.ROOSTING
             return StayIntent()
-        agent.state = ChickadeeState.PRE_ROOST
         if percept.cavity_roost is not None:
             cav = percept.cavity_roost
             if (
@@ -187,7 +183,6 @@ def decide_chickadee(
 
     # 3. Warmup: still inside a cavity at daytime → exit to trunk.
     if agent.layer == Layer.CAVITY and percept.is_daytime:
-        agent.state = ChickadeeState.WARMUP
         return MoveIntent(to_x=agent.x, to_y=agent.y, to_layer=Layer.TRUNK)
 
     # 4. Sated chickadees rest in place on a tree to avoid grinding food to

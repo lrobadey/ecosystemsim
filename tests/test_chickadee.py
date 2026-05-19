@@ -371,10 +371,11 @@ def test_default_scenario_time_budget_skewed_to_trees() -> None:
     _, log = run_headless(cfg)
     last_summary = next(r for r in reversed(log.all_records()) if r.event_type == "day_summary")
     for a in last_summary.payload["agents"]:
-        budget = a["time_budget"]
-        tree_ticks = budget["trunk"] + budget["canopy"] + budget["cavity"]
+        budget = a["daylight_time_budget"]
         total = sum(budget.values())
-        assert tree_ticks / total >= 0.75, f"agent {a['agent_id']} time_budget={budget}"
+        assert total > 0, f"agent {a['agent_id']} had no daytime ticks"
+        tree_ticks = budget["trunk"] + budget["canopy"] + budget["understory"]
+        assert tree_ticks / total >= 0.75, f"agent {a['agent_id']} daylight_time_budget={budget}"
 
 
 def test_determinism_with_agents() -> None:
@@ -532,22 +533,24 @@ def test_energy_never_negative_without_starvation_event(seed: int, density: floa
         ),
         max_ticks=400,
     )
-    _, log = run_headless(cfg)
-    records = log.all_records()
-    starved_by_tick: dict[int, set[int]] = {}
-    for r in records:
-        if r.event_type == "chickadee_starved" and r.actor_id is not None:
-            starved_by_tick.setdefault(r.tick, set()).add(r.actor_id)
-    # Any negative energy reading must occur on the same tick a starvation event
-    # is emitted for that agent.
-    for r in records:
-        if r.event_type != "day_summary":
-            continue
-        for a in r.payload["agents"]:
-            if a["energy_kj"] < 0:
-                # Either it's the death tick or any earlier tick had a starved event
-                # — for max_ticks=400 we expect only the same-tick relationship.
-                assert any(a["agent_id"] in s for s in starved_by_tick.values()), a
+    world, store, rng = _generate_world(cfg)
+    agents = spawn_chickadees(cfg, world, store, rng)
+    clock = make_clock(cfg.clock.tick_seconds, cfg.clock.max_ticks)
+    log = EventLog()
+    for _ in range(cfg.clock.max_ticks):
+        clock.advance()
+        intents = []
+        for a in agents.alive_chickadees():
+            percept = build_chickadee_percept(a, world, store, clock, cfg)
+            intents.append((a, decide_chickadee(a, percept, cfg, rng)))
+        resolve_chickadee_intents(intents, world, store, log, clock.current_tick, rng, cfg)
+        apply_chickadee_metabolism(agents.chickadees, world, store, clock, cfg, log)
+        # Core invariant: alive agents must have strictly positive energy.
+        for a in agents.chickadees:
+            if a.alive:
+                assert a.energy_kj > 0.0, (
+                    f"tick={clock.current_tick} agent={a.agent_id} alive but energy={a.energy_kj}"
+                )
 
 
 def test_resource_biomass_stays_non_negative_after_run() -> None:
